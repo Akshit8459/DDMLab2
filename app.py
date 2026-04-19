@@ -1,11 +1,13 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse
 import math
 import re
+import os
 
 app = FastAPI()
 
-# ✅ CORS (important for frontend)
+# ✅ CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -27,8 +29,11 @@ model = {}
 class_doc = {}
 class_total_words = {}
 
-# 🔥 LOAD MODEL
-with open("model.txt") as f:
+# 🔥 Load model safely (important for deployment)
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+MODEL_PATH = os.path.join(BASE_DIR, "model.txt")
+
+with open(MODEL_PATH) as f:
     for line in f:
         parts = line.strip().split("\t")
         if len(parts) != 2:
@@ -77,7 +82,7 @@ def preprocess(text):
     return clean
 
 
-# 🔹 Softmax for probabilities
+# 🔹 Softmax
 def softmax(scores):
     max_score = max(scores.values())
     exp_scores = {k: math.exp(v - max_score) for k, v in scores.items()}
@@ -85,13 +90,12 @@ def softmax(scores):
     return {k: exp_scores[k] / total for k in exp_scores}
 
 
-# 🔹 Prediction with confidence
+# 🔹 Prediction
 def predict_with_confidence(text):
     words = preprocess(text)
     scores = {}
 
     for label in class_doc:
-        # balanced prior
         scores[label] = math.log((class_doc[label] + 1) / (total_docs + len(class_doc)))
 
         total_words = class_total_words.get(label, 1)
@@ -107,21 +111,23 @@ def predict_with_confidence(text):
     return predicted, probs
 
 
-@app.get("/")
-def home():
-    return {"message": "Mental Health Classifier API running"}
+# 🔥 Serve frontend (THIS FIXES YOUR ISSUE)
+@app.get("/", response_class=HTMLResponse)
+def serve_ui():
+    INDEX_PATH = os.path.join(BASE_DIR, "index.html")
+    with open(INDEX_PATH, "r") as f:
+        return f.read()
 
 
+# 🔥 Prediction API
 @app.post("/predict")
 def classify(data: dict):
     text = data.get("text", "")
 
     label, probs = predict_with_confidence(text)
-    confidence=probs[label]
+    confidence = probs[label]
 
-
-
-    # 🔥 Threshold logic
+    # ⚠️ Low confidence handling
     if confidence < 0.5:
         return {
             "label": "Uncertain",
