@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mental Health AI</title>
+
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+
+<style>
+body {
+    margin: 0;
+    font-family: 'Inter', sans-serif;
+    background: linear-gradient(135deg, #0f172a, #1e293b);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    color: white;
+}
+
+.container {
+    width: 420px;
+    background: rgba(255,255,255,0.05);
+    backdrop-filter: blur(20px);
+    border-radius: 20px;
+    padding: 30px;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+}
+
+h2 {
+    text-align: center;
+    margin-bottom: 20px;
+}
+
+textarea {
+    width: 100%;
+    height: 120px;
+    border-radius: 12px;
+    border: none;
+    padding: 12px;
+    font-size: 14px;
+    outline: none;
+}
+
+button {
+    width: 100%;
+    padding: 12px;
+    margin-top: 15px;
+    border-radius: 12px;
+    border: none;
+    font-size: 16px;
+    cursor: pointer;
+    background: linear-gradient(90deg, #3b82f6, #06b6d4);
+    color: white;
+    transition: 0.3s;
+}
+
+button:hover {
+    transform: scale(1.03);
+}
+
+.result-card {
+    margin-top: 20px;
+    padding: 15px;
+    border-radius: 12px;
+    background: rgba(255,255,255,0.08);
+}
+
+/* Badges */
+.badge {
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-weight: bold;
+    display: inline-block;
+}
+
+.Depression { background: #ef4444; }
+.Anxiety { background: #f59e0b; }
+.Normal { background: #22c55e; }
+.Suicidal { background: #dc2626; }
+.Stress { background: #fb923c; }
+.Bipolar { background: #a855f7; }
+.Personality { background: #64748b; }
+
+/* Confidence Bar */
+.bar-container {
+    width: 100%;
+    height: 12px;
+    background: rgba(255,255,255,0.1);
+    border-radius: 10px;
+    margin-top: 10px;
+    overflow: hidden;
+}
+
+.bar-fill {
+    height: 100%;
+    width: 0%;
+    border-radius: 10px;
+    background: linear-gradient(90deg, #22c55e, #3b82f6);
+    transition: width 0.6s ease;
+}
+
+/* Loader */
+.loader {
+    margin-top: 10px;
+    font-size: 14px;
+    opacity: 0.7;
+}
+
+/* Warning */
+.warning {
+    color: #facc15;
+    font-weight: bold;
+}
+
+/* High Risk Alert */
+.alert {
+    border: 2px solid #ef4444;
+    background: rgba(239, 68, 68, 0.2);
+}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+    <h2>🧠 Mental Health AI</h2>
+
+    <textarea id="text" placeholder="Describe how you're feeling..."></textarea>
+
+    <button onclick="predict()">Analyze</button>
+
+    <div class="loader" id="loading"></div>
+    <div id="result"></div>
+</div>
+
+<script>
+async function predict() {
+    const text = document.getElementById("text").value;
+    const resultDiv = document.getElementById("result");
+    const loadingDiv = document.getElementById("loading");
+
+    if (!text.trim()) {
+        resultDiv.innerHTML = "⚠️ Please enter some text";
+        return;
+    }
+
+    loadingDiv.innerHTML = "Analyzing...";
+    resultDiv.innerHTML = "";
+
+    try {
+        const response = await fetch("http://127.0.0.1:8000/predict", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({ text })
+        });
+
+        const data = await response.json();
+
+        // 🚨 HIGH RISK ALERT
+        if (data.label === "Suicidal" && data.confidence > 0.6) {
+            resultDiv.innerHTML = `
+                <div class="result-card alert">
+                    <h3 style="color:#ef4444;">🚨 High Risk Detected</h3>
+                    <p>This text may indicate emotional distress or harmful thoughts.</p>
+
+                    <div class="badge Suicidal">Suicidal</div>
+                    <p>Confidence: ${(data.confidence * 100).toFixed(2)}%</p>
+
+                    <div class="bar-container">
+                        <div class="bar-fill" style="width:${data.confidence * 100}%"></div>
+                    </div>
+
+                    <br>
+                    <p style="font-size:14px; opacity:0.8;">
+                        💬 Consider reaching out to someone you trust or a professional.
+                    </p>
+                </div>
+            `;
+            loadingDiv.innerHTML = "";
+            return;
+        }
+
+        // ⚠️ LOW CONFIDENCE
+        if (data.label === "Uncertain") {
+            resultDiv.innerHTML = `
+                <div class="result-card">
+                    <div class="warning">⚠️ ${data.message}</div>
+                    <p>Confidence: ${(data.confidence * 100).toFixed(2)}%</p>
+                    <div class="bar-container">
+                        <div class="bar-fill" style="width:${data.confidence * 100}%"></div>
+                    </div>
+                </div>
+            `;
+            loadingDiv.innerHTML = "";
+            return;
+        }
+
+        // ✅ NORMAL RESULT
+        const confidence = data.confidence * 100;
+
+        resultDiv.innerHTML = `
+            <div class="result-card">
+                <h3>Prediction</h3>
+                <div class="badge ${data.label}">${data.label}</div>
+                <p>Confidence: ${confidence.toFixed(2)}%</p>
+
+                <div class="bar-container">
+                    <div class="bar-fill" id="confidenceBar"></div>
+                </div>
+
+                <br><b>All Scores:</b><br>
+                ${Object.entries(data.all_scores)
+                    .map(([k,v]) => `${k}: ${(v*100).toFixed(2)}%`)
+                    .join("<br>")}
+            </div>
+        `;
+
+        // animate bar
+        setTimeout(() => {
+            document.getElementById("confidenceBar").style.width = confidence + "%";
+        }, 100);
+
+    } catch (err) {
+        resultDiv.innerHTML = "❌ Backend not reachable";
+    }
+
+    loadingDiv.innerHTML = "";
+}
+</script>
+
+</body>
+</html>
