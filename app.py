@@ -141,3 +141,10 @@ def classify(data: dict):
         "confidence": round(confidence, 4),
         "all_scores": {k: round(v, 4) for k, v in probs.items()}
     }
+
+
+if __name__ == "__main__":
+    import uvicorn
+    import os
+    port = int(os.environ.get("PORT", 10000))
+    uvicorn.run(app, host="0.0.0.0", port=port)
